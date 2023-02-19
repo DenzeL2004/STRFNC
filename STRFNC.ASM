@@ -72,26 +72,17 @@ MUL10		macro
 
 
 Start:
-   ; SET_MEMADRESS
 
-    push 5d
-    push '!'
     push offset Str1
+    push offset Str2
     
-    call Memset
+    call Strcmp
 
-    pop bx
-    pop bx
-    pop bx
+    SET_MEMADRESS
 
-
-    mov dx, di
-    mov ah, 09h
-    int 21h
-
-   ; mov di, SIZE_VIDMEM_LINE * 2d
-    ;mov ax, si
-    ;call DecRep    
+    mov di, SIZE_VIDMEM_LINE * 2d
+    mov ax, cx
+    call DecRep    
 
     Exit 0;
 
@@ -189,7 +180,6 @@ Start:
         mov si, word ptr strSrcPtr  ;si = strSrcPtr
         mov di, word ptr strDstPtr  ;di = strDstPtr
 
-
         @@next:
             
             movsb
@@ -206,6 +196,45 @@ Start:
         pop bp      ;recover bp value
         ret 
     Memcpy endp
+
+    ;-----------------------------------------------------------------
+	;string comparison (CDECL)
+	;----------------------------------------------------------------- 
+    ;Param: strDstPtr (addres destination string), strSrcPtr (addres source string), prefLen (counter)
+    ;Entry: none
+	;Exit: cx 
+	;Destroy: di, si
+	;-----------------------------------------------------------------
+    Memcmp proc
+        push bp    ;save bp value to stack
+        mov bp, sp ;save bp value to bp
+
+        strDstPtr  equ [bp + 4] ;input param
+        strSrcPtr  equ [bp + 6] ;input param
+        prefLen    equ word ptr [bp + 8] ;input param
+
+        mov si, word ptr strSrcPtr  ;si = strSrcPtr
+        mov di, word ptr strDstPtr  ;di = strDstPtr
+
+        xor cx, cx
+
+        @@next:
+            mov cl, byte ptr [di]
+            sub cl, byte ptr [si] 
+            je @@endIf1
+                mov prefLen, 1d
+            @@endIf1:
+
+            inc si ;si++
+            inc di ;di++
+        
+        dec prefLen     ;pref--
+        cmp prefLen, 0d ;check counter is zero
+        jne @@next
+
+        pop bp      ;recover bp value
+        ret 
+    Memcmp endp
 
     ;-----------------------------------------------------------------
 	;set n symbols to src (CDECL)
@@ -234,8 +263,6 @@ Start:
         cmp prefLen, 0d ;check counter is zero
         jne @@next
 
-
-    @@goToRet:
         mov di, strDstPtr      ;return value
 
         pop bp      ;recover bp value
@@ -279,6 +306,47 @@ Start:
         pop bp      ;recover bp value
         ret 2d * 2d ;delet two paramtrs
     Strchr endp
+
+    ;-----------------------------------------------------------------
+	;string comparison (CDECL)
+	;----------------------------------------------------------------- 
+    ;Param: strDstPtr (addres destination string), strSrcPtr (addres source string), prefLen (counter)
+    ;Entry: none
+	;Exit: cx 
+	;Destroy: di, si
+	;-----------------------------------------------------------------
+    Strcmp proc
+        push bp    ;save bp value to stack
+        mov bp, sp ;save bp value to bp
+
+        strSrcPtr  equ [bp + 4] ;input param
+        strDstPtr  equ [bp + 6] ;input param
+        
+        mov si, word ptr strSrcPtr  ;si = strSrcPtr
+        mov di, word ptr strDstPtr  ;di = strDstPtr
+
+        xor cx, cx
+
+        @@next:
+            mov cl, byte ptr [di]
+            sub cl, byte ptr [si] 
+            je @@endIf1
+                mov prefLen, 1d
+                jmp @@goToRet
+            @@endIf1:
+
+            inc si ;si++
+            inc di ;di++
+        
+        cmp byte ptr [si], '$' ;check counter is zero
+        jne @@next
+
+        @@goToRet:
+
+        pop bp      ;recover bp value
+        ret 
+    Strcmp endp
+
 
     ;-----------------------------------------------------------------
 	;copy symbols from src to dst string(CDECL)
