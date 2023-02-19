@@ -74,11 +74,16 @@ MUL10		macro
 Start:
    ; SET_MEMADRESS
 
-
-    push offset Str2
+    push 5d
+    push '!'
     push offset Str1
+    
+    call Memset
 
-    call Strcpy
+    pop bx
+    pop bx
+    pop bx
+
 
     mov dx, di
     mov ah, 09h
@@ -201,6 +206,41 @@ Start:
         pop bp      ;recover bp value
         ret 
     Memcpy endp
+
+    ;-----------------------------------------------------------------
+	;set n symbols to src (CDECL)
+	;----------------------------------------------------------------- 
+    ;Param: strDstPtr (addres destination string), cpyCh (given symbol)
+    ;Entry: none
+	;Exit: di 
+	;Destroy: al, di
+	;-----------------------------------------------------------------
+    Memset proc
+        push bp    ;save bp value to stack
+        mov bp, sp ;save bp value to bp
+
+        strDstPtr  equ [bp + 4] ;input param
+        cpyCh      equ [bp + 6] ;input param
+        prefLen    equ word ptr [bp + 8] ;input param
+
+        mov di, word ptr strDstPtr  ;di = strDstPtr
+
+        @@next:
+            
+            mov al, byte ptr cpyCh
+            STOSB
+
+        dec prefLen     ;pref--
+        cmp prefLen, 0d ;check counter is zero
+        jne @@next
+
+
+    @@goToRet:
+        mov di, strDstPtr      ;return value
+
+        pop bp      ;recover bp value
+        ret 
+    Memset endp
 
     ;-----------------------------------------------------------------
 	;find addres first symbol (PASCAL)
