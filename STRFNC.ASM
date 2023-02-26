@@ -3,435 +3,230 @@
 org 100h
 
 locals @@
-
-
-MIDDLE_SCREEN 	 equ 80d * 12d + 40d 
-SIZE_VIDMEM_LINE equ 80d
-VIDMEM_ADR 	  	 equ 0B800h
-
-START_INPUT_PARAM equ 0080h
-
-COLOR_FRAME	equ 3F00h 			;white symbol on cyan frame				
+	
 
 NOPE equ nop
 
-;-----------------------------------------------------------------
-;Exit
-;-----------------------------------------------------------------
-;Entrt: nope
-;Exit: N/A
-;Destroy: N/A
-;-----------------------------------------------------------------
-
-Exit	macro code
-		NOPE
-
-		mov AX, 4c00h or code
-		int 21h		
-
-		NOPE
-		endm
-
-;-----------------------------------------------------------------
-;Set Memory Address
-;-----------------------------------------------------------------
-;Entrt: nope
-;Exit: es
-;Destroy: di
-;-----------------------------------------------------------------
-
-SET_MEMADRESS	macro
-				NOPE
-
-				mov di, VIDMEM_ADR		;video memory address
-				mov es, di
-
-				NOPE
-				endm
-
-;-----------------------------------------------------------------
-;multiplies the value of a register bx by 10 use bit shifting
-;-----------------------------------------------------------------
-;Entrt: bx (input val)
-;Exit: bx 
-;Destroy: dx
-;-----------------------------------------------------------------
-MUL10		macro
-			NOPE
-
-			mov dx, bx 	;save bx val
-
-			shl bx, 3d 	;bx = bx * 8
-			shl dx, 1d	;dx = dx * 2
-
-			add bx, dx	
-			
-			NOPE
-			endm
+TERM_SYM equ '$'
 
 
 
 Start:
-
-    push offset Str1
-    push offset Str2
-    
-    call Strcmp
-
-    SET_MEMADRESS
-
-    mov di, SIZE_VIDMEM_LINE * 2d
-    mov ax, cx
-    call DecRep    
-
-    Exit 0;
-
     ;-----------------------------------------------------------------
-	;calculate the length of a string (PASCAL)
+	;calculate the length of a string
 	;-----------------------------------------------------------------
-    ;Param: strPtr (addres to start string)
-	;Exit: si 
-	;Destroy: si
+	;Assumes: es = coorect segment
+    ;Entry: di (input string address)
+    ;Exit: bx (len)
+	;Destroy: di, al, df
 	;-----------------------------------------------------------------
     Strlen proc
-        push bp    ;save bp value to stack
-        mov bp, sp ;save bp value to bp
-
-        strPtr equ [bp + 4] ;input param
-
-        mov si, word ptr strPtr  ;si = strPtr
-
-        cmp byte ptr [si], '$' ;check on terminate symbol
-        je @@goToRet
-
+        cld      ;setting the df flag to zero 
+        
+        mov al, TERM_SYM ;set al terminate symbol
+        
         @@next:
-            inc si  ;si++
-        cmp byte ptr [si], '$' ;check on terminate symbol
+            inc bx  ;length++
+            scasb   ;check current symbol
         jne @@next
-
-    @@goToRet:
-        sub si, strPtr
-
-        pop bp      ;recover bp value
-        ret 2d * 1d ;free stack memory from parameters
+        
+        dec bx      ;terminate symbol not included in string length
+   
+        ret
     Strlen endp
 
     ;-----------------------------------------------------------------
-	;find addres first symbol (CDECL)
+	;find addres first given symbol in n sumbols
 	;-----------------------------------------------------------------
-    ;Param: strPtr (addres to start string), findCh (given symbol)
-	;Exit: si 
-	;Destroy: al, si
+    ;Param: [bp + 4] - counter
+    ;Entry: al (input symbol)
+	;Exit: di (FFFFh - if there is no symbol, another address symbol)
+	;Destroy: di, cx, df
 	;-----------------------------------------------------------------
     Memchr proc
         push bp    ;save bp value to stack
         mov bp, sp ;save bp value to bp
 
-        strPtr  equ [bp + 4] ;input param
-        findCh  equ byte ptr [bp + 6] ;input param
-        prefLen equ word ptr [bp + 8] ;input param
+        cld ;setting the df flag to zero 
 
-        mov si, word ptr strPtr  ;si = strPtr
+        mov cx, word ptr [bp + 4] ;counter coppy
 
-        @@next:
-
-            cmp byte ptr [si], '$' ;check is symol is det
-            je @@break
-
-            mov al, findCh
-            cmp al, byte ptr [si] ;check cur symbol is given
-            je @@goToRet
-
-            inc si  ;si++
-
-        dec prefLen     ;pref--
-        cmp prefLen, 0d ;check counter is zero
-        jne @@next
-
-
-    @@break:
-        mov si, strPtr ;string without given sybol 
-        dec si
+        repne scasb     ;compare string's symbol with given symbol
+        je @@goToRet
+        
+        xor di, di ;don't find symbol
 
     @@goToRet:
-        sub si, strPtr ;get address given symbol in string
-        inc si
+        dec di      ;decrease address
 
         pop bp      ;recover bp value
-        ret 
+        ret 2d * 1d ;free stack
     Memchr endp
 
     ;-----------------------------------------------------------------
-	;copy n symbols from src ro dst string(CDECL)
+	;copy n symbols from src to dst string
 	;----------------------------------------------------------------- 
-    ;Param: strDstPtr (addres destination string), strSrcPtr (addres source string), prefLen (counter)
-    ;Entry: none
-	;Exit: di 
-	;Destroy: di, si
+    ;Param: [bp+4] - counter
+    ;Entry: di, si
+	;Exit: di
+	;Destroy: di, si, cx, df
 	;-----------------------------------------------------------------
     Memcpy proc
         push bp    ;save bp value to stack
         mov bp, sp ;save bp value to bp
 
-        strDstPtr  equ [bp + 4] ;input param
-        strSrcPtr  equ [bp + 6] ;input param
-        prefLen    equ word ptr [bp + 8] ;input param
+        cld ;setting the df flag to zero 
 
-        mov si, word ptr strSrcPtr  ;si = strSrcPtr
-        mov di, word ptr strDstPtr  ;di = strDstPtr
-
-        @@next:
-            
-            movsb
-
-        dec prefLen     ;pref--
-        cmp prefLen, 0d ;check counter is zero
-        jne @@next
+        mov cx, word ptr [bp + 4] ;counter coppy
+        rep movsb                 ;coppy
 
 
     @@goToRet:
-        mov byte ptr [di], '$' ;set terminate symbol
-        mov di, strDstPtr      ;return value
+        sub di, [bp + 4]            ;return value
 
         pop bp      ;recover bp value
-        ret 
+        ret 2d * 1d ;free stack
     Memcpy endp
 
     ;-----------------------------------------------------------------
-	;string comparison (CDECL)
+	;string comparison by first n symbols
 	;----------------------------------------------------------------- 
-    ;Param: strDstPtr (addres destination string), strSrcPtr (addres source string), prefLen (counter)
-    ;Entry: none
-	;Exit: cx 
-	;Destroy: di, si
+    ;Param: [bp+4] - counter
+    ;Entry: di, si
+	;Exit: cl
+	;Destroy: di, si, cx, df
 	;-----------------------------------------------------------------
     Memcmp proc
         push bp    ;save bp value to stack
         mov bp, sp ;save bp value to bp
 
-        strDstPtr  equ [bp + 4] ;input param
-        strSrcPtr  equ [bp + 6] ;input param
-        prefLen    equ word ptr [bp + 8] ;input param
+        cld ;setting the df flag to zero 
 
-        mov si, word ptr strSrcPtr  ;si = strSrcPtr
-        mov di, word ptr strDstPtr  ;di = strDstPtr
+        mov cx, word ptr [bp + 4] ;counter coppy
 
-        xor cx, cx
-
-        @@next:
-            mov cl, byte ptr [di]
-            sub cl, byte ptr [si] 
-            je @@endIf1
-                mov prefLen, 1d
-            @@endIf1:
-
-            inc si ;si++
-            inc di ;di++
+        repe cmpsb ;compare strings
         
-        dec prefLen     ;pref--
-        cmp prefLen, 0d ;check counter is zero
-        jne @@next
+        dec si 
+        dec di     
+
+        mov cl, byte ptr ds:[si] ;------------------
+        sub cl, byte ptr es:[di] ;compare last symbol
 
         pop bp      ;recover bp value
-        ret 
+        ret 2d * 1d
     Memcmp endp
 
     ;-----------------------------------------------------------------
-	;set n symbols to src (CDECL)
+	;set n symbols to dst 
 	;----------------------------------------------------------------- 
-    ;Param: strDstPtr (addres destination string), cpyCh (given symbol)
-    ;Entry: none
+    ;Param: [bp + 4] - counter
+    ;Entry: al (input char), di
 	;Exit: di 
-	;Destroy: al, di
+	;Destroy: di
 	;-----------------------------------------------------------------
     Memset proc
         push bp    ;save bp value to stack
         mov bp, sp ;save bp value to bp
 
-        strDstPtr  equ [bp + 4] ;input param
-        cpyCh      equ [bp + 6] ;input param
-        prefLen    equ word ptr [bp + 8] ;input param
+        cld ;setting the df flag to zero 
 
-        mov di, word ptr strDstPtr  ;di = strDstPtr
+        mov cx, word ptr [bp + 4] ;counter coppy
 
-        @@next:
-            
-            mov al, byte ptr cpyCh
-            STOSB
+        rep stosb
 
-        dec prefLen     ;pref--
-        cmp prefLen, 0d ;check counter is zero
-        jne @@next
+        sub di, word ptr [bp + 4] ;return start addres
 
-        mov di, strDstPtr      ;return value
-
-        pop bp      ;recover bp value
-        ret 
+        pop bp  ;recover bp value
+        ret 2d * 1d
     Memset endp
 
     ;-----------------------------------------------------------------
-	;find addres first symbol (PASCAL)
+	;find addres first symbol
 	;-----------------------------------------------------------------
-    ;Param: strPtr (addres to start string), findCh (given symbol)
-	;Exit: si 
-	;Destroy: al, si
+    ;Assumes: line ends with a terminate symbol
+    ;Entry: al (input symbol)
+	;Exit: di 
+	;Destroy: di, df
 	;-----------------------------------------------------------------
     Strchr proc
-        push bp    ;save bp value to stack
-        mov bp, sp ;save bp value to bp
-
-        strPtr  equ [bp + 6] ;input param
-        findCh  equ byte ptr [bp + 4] ;input param
-
-        mov si, word ptr strPtr  ;si = strPtr
-
+        
+        cld      ;setting the df flag to zero 
+        
         @@next:
+            scasb       ;check current symbol
+            je @@break  ;if find given symbol
 
-            mov al, findCh
-            cmp al, byte ptr [si] ;check cur symbol is given
-            je @@goToRet
-
-            inc si  ;si++
-
-        cmp byte ptr [si], '$' ;check is symol is det
+            cmp byte ptr es:[di], TERM_SYM ;check is terminate symbol
         jne @@next
+        
+        xor di, di ;don't find symbol
 
-        mov si, strPtr ;string without given sybol 
-        dec si
+    @@break:
+        dec di  ;decrease address
 
-    @@goToRet:
-        sub si, strPtr ;get address given symbol in string
-        inc si
-
-        pop bp      ;recover bp value
-        ret 2d * 2d ;delet two paramtrs
+        ret 
     Strchr endp
 
     ;-----------------------------------------------------------------
-	;string comparison (CDECL)
+	;string comparison
 	;----------------------------------------------------------------- 
-    ;Param: strDstPtr (addres destination string), strSrcPtr (addres source string), prefLen (counter)
-    ;Entry: none
-	;Exit: cx 
-	;Destroy: di, si
+    ;Assumes: line ends with a terminate symbol
+    ;Entry: di, si
+	;Exit: cl
+	;Destroy: di, si, df
 	;-----------------------------------------------------------------
     Strcmp proc
-        push bp    ;save bp value to stack
-        mov bp, sp ;save bp value to bp
 
-        strSrcPtr  equ [bp + 4] ;input param
-        strDstPtr  equ [bp + 6] ;input param
-        
-        mov si, word ptr strSrcPtr  ;si = strSrcPtr
-        mov di, word ptr strDstPtr  ;di = strDstPtr
-
-        xor cx, cx
+        cld ;setting the df flag to zero 
 
         @@next:
-            mov cl, byte ptr [di]
-            sub cl, byte ptr [si] 
-            je @@endIf1
-                mov prefLen, 1d
-                jmp @@goToRet
-            @@endIf1:
+            cmpsb ;compare strings
+            jne @@break
 
-            inc si ;si++
-            inc di ;di++
-        
-        cmp byte ptr [si], '$' ;check counter is zero
+        cmp byte ptr es:[di], TERM_SYM ;check is terminate symbol
         jne @@next
 
-        @@goToRet:
+    @@break:
+        dec si 
+        dec di     
 
-        pop bp      ;recover bp value
-        ret 
+        mov cl, byte ptr ds:[si] ;------------------
+        sub cl, byte ptr es:[di] ;compare last symbol
+
+        ret
     Strcmp endp
 
 
     ;-----------------------------------------------------------------
-	;copy symbols from src to dst string(CDECL)
-	;----------------------------------------------------------------- 
-    ;Param: strDstPtr (addres destination string), strSrcPtr (addres source string), prefLen (counter)
-    ;Entry: none
-	;Exit: di 
-	;Destroy: di, si
+	;copy from src to dst string
+	;-----------------------------------------------------------------
+    ;Assumes: line ends with a terminate symbol
+    ;Entry: di, si
+	;Exit: di
+	;Destroy: di, si, cx, df
 	;-----------------------------------------------------------------
     Strcpy proc
-        push bp    ;save bp value to stack
-        mov bp, sp ;save bp value to bp
 
-        strDstPtr  equ [bp + 6] ;input param
-        strSrcPtr  equ [bp + 4] ;input param
+        cld ;setting the df flag to zero 
 
-        mov si, word ptr strSrcPtr  ;si = strSrcPtr
-        mov di, word ptr strDstPtr  ;di = strDstPtr
+        push di     ;save to stack start string addres
 
         @@next:
+            movsb  ;coppy to dst from src
 
-            movsb
+            cmp byte ptr ds:[si], TERM_SYM ;check is terminate symbol
+        jne @@next 
 
-        cmp byte ptr [si], '$' ;check is symol is det
-        jne @@next
+        mov es:[di], TERM_SYM
 
-    @@goToRet:
-        mov byte ptr [di], '$'
-        mov di, strDstPtr
-
-        pop bp      ;recover bp value
-        ret 2d * 2d ;delet two paramtrs
+        pop di ;recover di from stack
+        
+        ret 
     Strcpy endp
     
-    ;-----------------------------------------------------------------
-	;Deс representation of a number
-	;-----------------------------------------------------------------
-	;Assumes: es = VIDMEM_ADR
-	;Entry: ax (input number), di (address in video mem)
-	;Exit: none
-	;Destroy: ax, cx, dx
-	;-----------------------------------------------------------------
-    DecRep	proc
-
-		push bp  		;save bp to stack
- 		mov bp, sp
-		sub sp, 2d 		 ;local var
-
-		quotient equ word ptr [bp-2] ;local var 'quotient'
-
-		mov quotient, ax	;dublicate ax value
-		mov cx, 10000d
-		
-		@@next:
-			xor dx, dx
-			mov ax, quotient
-			div cx 				;dx:ax div cx
-			
-			or al, '0'
-			or ax, COLOR_FRAME
-			mov word ptr es:[di], ax	;set symbol to video mem
-			add di, 2d 					;increse di pointere
-
-			mov quotient, dx
-
-			mov ax, cx		;ax = 10^i
-			xor dx, dx 		;
-
-			mov cx, 10d 	;-----------------------+
-			div cx			;dx:ax div cx (cx / 10)	|
-			mov cx, ax 		;save quotient to cx
-
-		cmp cx, 0d
-		jne @@next
-
-		mov word ptr es:[di], COLOR_FRAME or 'd' ;set 'd' sumbol to video mem
-
-		mov sp, bp 		;abandoning the place of local variables
-		pop bp 			;bp recovery
-
-		ret
-	DecRep	endp
-
+    
 .data
-Str1 db "Hello world!", '$' ;debug string
-Str2 db "Hello Ded!", '$' ;debug string
+Str1 db "Hello world!", TERM_SYM ;debug string
+Str2 db "Held morning Ded!", TERM_SYM ;debug string
 	
 end Start
